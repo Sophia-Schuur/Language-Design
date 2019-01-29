@@ -2,13 +2,7 @@
 1/21/2019
 This program performs several simple independent functions and respective tests. *)
 
-(*Removes duplicates in a list*);
-fun removeDuplicates ([]) = []
-	| removeDuplicates(head::rest) = 
-	    if exists(head, rest)
-			then removeDuplicates(rest)			
-		else 
-			head::removeDuplicates(rest);
+
 
 (*Remove undesired chars from a string. Used to remove spaces in isPalindrome*)
 fun removeChar(string, chars) =
@@ -18,11 +12,19 @@ fun removeChar(string, chars) =
 (*Capitalizes all chars of a string. Used to ignore casing in isPalindrome*)
 fun Capitalize s =
   	let 
-  		fun upper (char::rest) = Char.toUpper char :: upper rest
-        	| upper [] = []
+  		fun upper(char::rest) = Char.toUpper char::upper(rest)
+        	| upper([]) = []
   	in 
-  		implode (upper (explode s)) 
+  		implode(upper (explode s)) 
 	end
+
+(*Removes all of given value in list*)
+fun removeAllInstances(value, []) = []
+    | removeAllInstances(value, (head::rest)) =
+     	if value = head
+     		then removeAllInstances(value, rest)
+    	else 
+	 		head::removeAllInstances(value, rest);
 
 
 (*- - - 1 - - -*)
@@ -45,6 +47,14 @@ equality operator (=), which determines if two values are equal. This means
 that both of its operands must be of the same type, hence the use of equality types (''a). *)
 
 
+(*Removes duplicates in a list*);
+fun removeDuplicates ([]) = []
+	| removeDuplicates(head::rest) = 
+	    if exists(head, rest)
+			then removeDuplicates(rest)			
+		else 
+			head::removeDuplicates(rest);
+
 (*- - - 2 - - -*)
 (*takes two lists as input and returns the union of those lists. 
 Order does not matter but each value appears in output list only once.
@@ -56,7 +66,7 @@ fun listUnion(List1, List2) =
           | unionHelper([], List2) = List2
           | unionHelper(List1, (L2::L2rest)) =
            if exists(L2, List1)
-           		then L2::unionHelper(L2rest, removeAllN(L2, List1))
+           		then L2::unionHelper(L2rest, removeAllInstances(L2, List1))
            		else L2::unionHelper(L2rest, List1)
        in
          unionHelper((removeDuplicates(List1)), (removeDuplicates(List2)))
