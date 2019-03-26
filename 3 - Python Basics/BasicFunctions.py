@@ -5,6 +5,7 @@ Includes Lists, dictionaries, loops, tuples, classes, higher-order functions and
 
 
 from functools import reduce
+from itertools import combinations
 
 '''Input: dictionary. Maps bus routes to bus stops.
    Output: dictionary. Maps bus stops to bus routes that stop at that stop. Alphabetically sorted.'''
@@ -83,6 +84,11 @@ def addDictN(L):
 
 def testaddDictN():
 	d = [{'Mon':{'355':2,'360':2},'Tue':{'451':2,'360':3},'Thu':{'360':3}, 'Fri':{'355':2}, 'Sun':{'355':1}},{'Tue':{'360':2},'Wed':{'355':2},'Fri':{'360':3, '355':1}},{'Mon':{'360':5},'Wed':{'451':4},'Thu':{'355':3},'Fri':{'360':6}, 'Sun':{'355':5}}]
+	d2 = [{'Mon':{'sandwich':2,'pork':1},'Tue':{'soup':1,'steak':1},'Thu':{'eggs':3}, 'Fri':{'steak':1}, 'Sun':{'soup':1}},{'Tue':{'sandwich':3},'Wed':{'pork':1},'Fri':{'eggs':4, 'sandwich':3}},{'Mon':{'pork':2},'Wed':{'steak':4},'Thu':{'soup':1},'Fri':{'soup':2}, 'Sun':{'steak':2}}]
+	
+	if addDictN(d2) != {'sandwich': 8, 'pork': 4, 'soup': 5, 'steak': 8, 'eggs': 7}:
+		return False
+
 	if addDictN({}) != {}:
 		return False
 	if addDictN(d) != {'355': 16, '360': 24, '451': 6}:
@@ -94,7 +100,6 @@ def testaddDictN():
 	Checks each dictionary in L for k in REVERSE. If k occurs > once, returns first value seen.
 	Output: value at k'''
 def searchDicts(L, k):
-	flag = 0
 	for d in reversed(L):
 		for l in d.items():
 			#print(l)
@@ -130,13 +135,13 @@ def searchDicts2(tL, k):
 		return [()]		#return empty list of tuples
 	else:	
 	#tL[i = tuple index][0,1 = either int index or dictionary][k = index of item in dictionary]
-		def indexHelper(i, tL, k):
+		def searchDicts2Helper(i, tL, k):
 		    if k in tL[i][1]:		# key in current dictionary (tL[i][1]?
 		        return tL[i][1][k] 	# return value of k
 	 
 		    elif i != 0:			# not in first tuple? Keep going thru list
 		        i = tL[i][0]
-		        return indexHelper(i, tL, k) 
+		        return searchDicts2Helper(i, tL, k) 
 
 		    elif i == 0:				# first tuple in list?
 		        if k in tL[i][1]:		# if k exists in dictionary
@@ -148,7 +153,7 @@ def searchDicts2(tL, k):
 		        return None 			# failsafe
 		
 		index = -1 						# begin at last tuple in list
-		return indexHelper(index, tL, k)
+		return searchDicts2Helper(index, tL, k)
 
 def testsearchDicts2():
 	L2= [(0,{"x":0,"y":True,"z":"zero"}), (0,{"x":1}),(1,{"y":False}), (1,{"x":3, "z":"three"}),(2,{})]
@@ -173,7 +178,29 @@ def testsearchDicts2():
 
 '''Input: List.
 	Output: List of Lists where each sublist is one of the 2^(length(L)) subsets of L. Increasing length.'''
-#def subsets(L):
+def subsets(L):
+	ret = [[]]
+	length = len(L) + 1
+		# combinations(p, r): returns r-length tuples, in sorted order, no repeated elements
+		# sum(iterable, start): adds start and items of the given iterable from left to right
+	innerMap = sum(map(lambda combo: list(combinations(L, combo)), range(1, length)), [])	#do combo() on all sublists of L
+	outerMap = map(list, innerMap)	#make sublists a list of lists instead of seperate tuples
+	return ret + list(outerMap)		#gotta return a list
+
+
+def testsubsets():
+	if(subsets([3, 6, 9])) != [[],[3],[6],[9],[3,6],[3,9],[6,9],[3,6,9]]:
+		return False
+	if(subsets([2, 4, 6, 8])) != [[], [2], [4], [6], [8], [2, 4], [2, 6], [2, 8], [4, 6], [4, 8], [6, 8], [2, 4, 6], [2, 4, 8], [2, 6, 8], [4, 6, 8], [2, 4, 6, 8]]:
+		return False
+
+	if subsets([1,2,3]) != [[],[1],[2],[3],[1,2],[1,3],[2,3],[1,2,3]]:
+		return False
+	if subsets([(1,"one"),(2,"two")]) != [[],[(1,"one")],[(2,"two")],[(1,"one"),(2,"two")]]:
+		return False
+	if subsets([]) != [[]]:
+		return False
+	return True
 
 
 
@@ -251,7 +278,7 @@ def testnumbersToSum():
     return True
 
 
-testFunctions = {"busStops":testbusStops,  "addDict": testaddDict, "addDictN": testaddDictN,"searchDicts": testsearchDicts, "searchDicts2": testsearchDicts2,"numPaths": testnumPaths, "numbersToSum":testnumbersToSum }
+testFunctions = {"busStops":testbusStops,  "addDict": testaddDict, "addDictN": testaddDictN, "searchDicts": testsearchDicts, "searchDicts2": testsearchDicts2, "subsets":testsubsets, "numPaths": testnumPaths, "numbersToSum":testnumbersToSum  }
 if __name__ == "__main__":
 	for testName,testFunc in testFunctions.items():
 		print(testName,':  ',testFunc())
