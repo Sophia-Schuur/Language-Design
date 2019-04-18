@@ -1,13 +1,14 @@
-# Sophia Schuur
+# Sophia Schuur 11519303
 # 4/13/2019
-# An Interpreter for a Simple Postscript-like Language
+# an interpreter for a simple scoped postScript 
 
 # Windows intended.
 
 import re
-
+scope = ""
 #------------------------- opstack operators -------------------------------------
 opstack = [] 
+
 
 def opPop():
     if (len(opstack) > 0):
@@ -28,24 +29,43 @@ def dictPop():
         print("[!] - Dictionary stack empty")
 
 def dictPush(d):
-    if (type (d) is dict):
-        dictstack.append(d)
-    else:
-        print("[!] - Dictionary stack empty")
+    dictstack.append(d)
 
 def define(name, value):
     if(len(dictstack) == 0):
-        d = {}
+        d = dict()
         d[name] = value
-        dictPush(d)
-    else:
-        (dictstack[-1])[name] = value
+        dictPush((0, d))    # "static link"?? "Activation record"??? oh well its just gonna be 0 for now.
 
-def lookup(name):
-    for d in reversed(dictstack):
-        if d.get('/'+name):
-            return d.get('/'+name)         
-    return None
+    else:   
+        (dictstack[-1][1])[name] = value
+
+
+def lookup(name, scope):
+    name = '/' + name  
+    if (scope == 'static'):
+        return staticLookup(list(dictstack), name, (len(dictstack) - 1))
+
+    elif (scope == 'dynamic'):
+        for item in reversed(dictstack):
+            (index, d) = item
+
+            if (name in d):
+                return (index, d.get(name))
+        else:
+            return None
+
+def staticLookup(d, name, index):
+    if (name in dictstack[index][1]):
+        return (index, dictstack[index][1][name])
+
+    elif (index == dictstack[index][0]):
+        return None
+
+    else:
+        next, _ = dictstack[index]
+        _ = d.pop(index)
+        return staticLookup(d, name, next)
 
 #--------------------Arithmetic and comparison operators--------------------------------------------
 def add():
@@ -244,15 +264,24 @@ def roll():
         print("[!] - Cannot roll(). Insufficient parameters in operator stack")
 
 def stack():
-    # if (len(opstack) == 0):
-    #     print("[]")
-    # else:
-    #     print("[ ", end ="")
-    #     for item in reversed(opstack):
-    #         print(item, "",  end ="")
-    #     print("]")
+    print("==============")
+
     for item in reversed(opstack):
         print(item)
+
+    print("==============")
+
+    for (index, item) in reversed(list(enumerate(dictstack))):
+        top, d = item
+
+        print("----", index, "----", top, "----")
+        
+        if (len(d) > 0):
+            for key in d:
+                print(key, d[key])
+
+    print("==============")
+
 
 #--------------------------dict manipulators -----------------------------------
 def psDict():
@@ -287,7 +316,80 @@ def psDef():
     else:
         print("[!] - Cannot psDef(). Operator stack empty")
 
-#---------------------------PART 2 parsing and stuff -----------------------------------
+#--------------------------- some operators: if, ifelse, for ---------------------------
+
+def psAnd():
+    if (len(opstack) > 1):
+        if (type(opstack[-1]) is bool) and (type(opstack[-2]) is bool):
+            op1 = opPop()
+            op2 = opPop()
+            opPush(op1 and op2)
+        else:
+            print("[!] - Cannot psAnd(). Either ", op1, " or ", op2, " is not a bool")
+    else:
+        print("[!] - Cannot psAnd(). Insufficient parameters")
+
+def psOr():
+    if (len(opstack) > 1):
+        if (type(opstack[-1]) is bool) and (type(opstack[-2]) is bool):
+            op1 = opPop()
+            op2 = opPop()
+            opPush(op1 or op2)
+        else:
+            print("[!] - Cannot psOr(). Either ", op1, " or ", op2, " is not a bool")
+    else:
+        print("[!] - Cannot psOr(). Insufficient parameters")
+
+def psNot():
+    if (len(opstack) > 0):
+        if (type(opstack[-1]) is bool):
+            op = opPop()
+            opPush(not op)
+        else:
+            print("[!] - Cannot psNot(). ", op, " is not a bool")
+    else:
+        print("[!] - Cannot psNot(). Insufficient parameters")
+
+def psIf():
+    code = opPop()
+    condition = opPop()
+    if condition:
+        interpretSPS(code, scope)
+    else:
+        print("[!] - Cannot If() - Condition is not a bool")
+
+def psIfElse():
+    elseCode = opPop()
+    ifCode = opPop()
+    condition = opPop()
+    if isinstance(condition, bool):
+        if condition:
+            interpretSPS(ifCode, scope)
+        else:
+            interpretSPS(elseCode, scope)
+    else:
+        print("[!] - Cannot IfElse() - Condition is not a bool")
+
+def psFor():
+    code = opPop()
+    end = opPop()
+    index = opPop()
+    start = opPop()
+
+    if isinstance(code, list):
+        if index > 0:
+            for item in range(start, end + 1, index):
+                opPush(item)
+                interpretSPS(code, scope)
+        else:
+            for item in range(start, end - 1, index):
+                opPush(item)
+                interpretSPS(code, scope)
+    else:
+        print("[!] - Cannot psFor() - Input is not a list")
+
+#--------------------------- parsing and stuff -----------------------------------
+
 def tokenize(s):
     return re.findall("/?[a-zA-Z()][a-zA-Z0-9_()]*|[-]?[0-9]+|[}{]+|%.*|[^ \t\n]", s)
 
@@ -335,7 +437,7 @@ def parse(L):
 
     return res
 
-def interpretSPS(code):
+def interpretSPS(code, scope):
     functions = {"add": add, "sub": sub, "mul": mul, "div": div, "mod": mod, "eq": eq, "lt": lt, "gt": gt,
                  "length": length, "get": get, "getinterval": getinterval, "put": put,
                  "dup": dup, "copy": copy, "pop": pop, "clear": clear, "exch": exch, "roll": roll, "stack": stack,
@@ -348,179 +450,112 @@ def interpretSPS(code):
             functions[token]() 
         except (KeyError, TypeError):
             try:
-                val = lookup(token)   
-                if isinstance(val, list):
-                    interpretSPS(val)
+                i, val = lookup(token, scope)   
+                if (isinstance(val, list)):                   
+                    dictPush((i, {}))
+                    interpretSPS(val, scope)
+                    dictPop()
                 else:
-                    opPush(int(val))
+                    opPush(val)
+            
             except:
                 try:
-                    opPush(int(token))
+                    opPush(token)
                 except:
                     opPush(token)
 
-def interpreter(s):               
-    interpretSPS(parse(tokenize(s)))
-
-
-#--------------------------- some operators, if, ifelse, for ---------------------------
-def psAnd():
-    if (len(opstack) > 1):
-        if (type(opstack[-1]) is bool) and (type(opstack[-2]) is bool):
-            op1 = opPop()
-            op2 = opPop()
-            opPush(op1 and op2)
-        else:
-            print("[!] - Cannot psAnd(). Either ", op1, " or ", op2, " is not a bool")
-    else:
-        print("[!] - Cannot psAnd(). Insufficient parameters")
-
-def psOr():
-    if (len(opstack) > 1):
-        if (type(opstack[-1]) is bool) and (type(opstack[-2]) is bool):
-            op1 = opPop()
-            op2 = opPop()
-            opPush(op1 or op2)
-        else:
-            print("[!] - Cannot psOr(). Either ", op1, " or ", op2, " is not a bool")
-    else:
-        print("[!] - Cannot psOr(). Insufficient parameters")
-
-def psNot():
-    if (len(opstack) > 0):
-        if (type(opstack[-1]) is bool):
-            op = opPop()
-            opPush(not op)
-        else:
-            print("[!] - Cannot psNot(). ", op, " is not a bool")
-    else:
-        print("[!] - Cannot psNot(). Insufficient parameters")
-
-def psIf():
-    code = opPop()
-    condition = opPop()
-    if condition:
-        interpretSPS(code)
-    else:
-        print("[!] - Cannot If() - Condition is not a bool")
-
-def psIfElse():
-    elseCode = opPop()
-    ifCode = opPop()
-    condition = opPop()
-    if isinstance(condition, bool):
-        if condition:
-            interpretSPS(ifCode)
-        else:
-            interpretSPS(elseCode)
-    else:
-        print("[!] - Cannot IfElse() - Condition is not a bool")
-
-def psFor():
-    code = opPop()
-    end = opPop()
-    index = opPop()
-    start = opPop()
-
-    if isinstance(code, list):
-        if index > 0:
-            for item in range(start, end + 1, index):
-                opPush(item)
-                interpretSPS(code)
-        else:
-            for item in range(start, end - 1, index):
-                opPush(item)
-                interpretSPS(code)
-    else:
-        print("[!] - Cannot psFor() - Input is not a list")
-
+def interpreter(s, scope):
+    print()
+    print("- - -", scope, "- - -")
+    interpretSPS(parse(tokenize(s)), scope)
+    print()
 
 #--------------------------- testing ---------------------------
-def testPut(): 
-    print(" - - - - - TESTPut - - - - -")  
-    opPush("(This is a test _)")
-    dup()
-    opPush("/s")
-    exch()
-    psDef()
-    dup()
-    opPush(15)
-    opPush(48)
-    put()
-    stack()
-    if lookup("s") != "(This is a test 0)" or opPop()!= "(This is a test 0)":
-        return False
-    return True
+
+def test0():
+    print(" - - - - - TEST0 - - - - -")
+    input1 = """
+        /x 4 def
+        /g { x stack } def
+        /f { /x 7 def g } def
+        f
+        """
+
+    interpreter(input1, "static")
+    clear()
+    interpreter(input1, "dynamic")
+    clear()
+
 
 def test1():
     print(" - - - - - TEST1 - - - - -")
-    input1 = """ /square { dup mul } def (square) 4 square dup 16 eq {(pass)} {(fail)} ifelse stack """
+    input2 = """
+        /m 50 def
+        /n 100 def
+        /egg1 {/m 25 def n} def
+        /chic {
+            /n 1 def
+            /egg2 { n } def
+            m n
+            egg1
+            egg2
+            stack } def
+        n
+        chic
+        """
+    interpreter(input2, "static")
     clear()
-    interpreter(input1)
-    if (opPop() != "(pass)" and opPop != 16 and opPop() != "(square)"):
-        return False
-    else:
-        return True
+    interpreter(input2, "dynamic")
+    clear()
 
 def test2():
     print(" - - - - - TEST2 - - - - -")
-    input2 = """ (facto) dup length /n exch def /fact { 0 dict begin /n exch def n 2 lt { 1} {n 1 sub fact n mul } ifelse end } def n fact stack """
+    input3 = """
+        /x 10 def
+        /A { x } def
+        /C { /x 40 def A stack } def
+        /B { /x 30 def /A { x } def C } def
+        B
+        """
+    interpreter(input3, "static")
     clear()
-    interpreter(input2)
-    if (opPop() != 120 and opPop() != "(facto)"):
-        return False
-    else:
-        return True
+    interpreter(input3, "dynamic")
+    clear()
 
 def test3():
     print(" - - - - - TEST3 - - - - -")
-    input3 = """ /fact{ 0 dict begin /n exch def 1 n -1 1 {mul} for end } def 6 fact stack """ 
+    input4 = """
+        /out true def
+        /xand { true eq {pop false} {true eq { false } { true } ifelse} ifelse 
+        dup /x exch def stack} def 
+        /myput { out dup /x exch def xand } def
+        /f { /out false def  myput } def
+        false f
+        """
+    interpreter(input4, "static")
     clear()
-    interpreter(input3)
-    if (opPop() != 720):
-        return False
-    else:
-        return True
+    interpreter(input4, "dynamic")
+    clear()
 
-def test4():
+
+def test4(): 
     print(" - - - - - TEST4 - - - - -")
-    input4 = """ /lt6 { 6 lt } def  1 2 3 4 5 6 4 -3 roll dup dup lt6 {mul mul mul} if stack""" 
+    input5 =  """
+        /x 10 def
+        /A { x } def
+        /B { /x 30 def /A { x stack } def /C { /x 40 def A } def C } def
+        B
+        """
+    interpreter(input5, "static")
     clear()
-    interpreter(input4)
-    if (opPop() != 300 and opPop() != 6 and opPop() != 2 and opPop() != 1):
-        return False
-    else:
-        return True
-
-def test5():
-    print(" - - - - - TEST5 - - - - -")
-    input5 = """ (CptS355_HW5) 4 3 getinterval (355) eq {(You_are_in_CptS355)} if stack """
+    interpreter(input5, "dynamic")
     clear()
-    interpreter(input5)
-    if (opPop() != "(You_are_in_CptS355)"):
-        return False
-    else:
-        return True
-
-def test6():
-    print(" - - - - - TEST6 - - - - -")
-    input6 = """ /pow2 {/n exch def (pow2_of_n_is) dup 8 n 48 add put 1 n -1 1 {pop 2 mul} for } def (Calculating_pow2_of_9) dup 20 get 48 sub pow2 stack """
-    clear()
-    interpreter(input6)
-    if (opPop() != 512 and opPop() != "(Pow2_of_9_is)" and opPop() != "(Calculating_pow2_of_9)"):
-        return False
-    else:
-        return True
-
-def main_part2():
-    testCases = [('put',testPut), ('test1', test1), ('test2', test2), ('test3', test3), ('test4', test4), ('test5', test5), ('test6', test6)]
-
-    failedTests = [testName for (testName, testProc) in testCases if not testProc()]
-    if failedTests:
-        return ('Some tests failed', failedTests)
-    else:
-        return ('All part-2 tests OK')
 
 if __name__ == '__main__':
-    print(main_part2())
+    test0()
+    test1()
+    test2()
+    test3()
+    test4()
+    
 
